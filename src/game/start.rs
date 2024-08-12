@@ -49,8 +49,14 @@ pub fn start(stdout: &mut impl Write) -> io::Result<()> {
     let mut direction = Direction::Down;
     let mut btn_direction = Direction::Down;
     let mut snake = vec![(10, 5), (10, 6), (10, 7)];
-    let mut food = (1, 1);
+    let mut food: Option<(u16, u16)> = Some((
+        rng.gen_range(1..t_size.0 - 1),
+        rng.gen_range(1..t_size.1 - 1),
+    ));
 
+    if let Some((x, y)) = food {
+        execute!(stdout, MoveTo(x, y), style::PrintStyledContent("█".cyan()))?;
+    }
     for i in snake.iter() {
         execute!(
             stdout,
@@ -60,7 +66,7 @@ pub fn start(stdout: &mut impl Write) -> io::Result<()> {
     }
 
     loop {
-        if event::poll(Duration::from_millis(500))? {
+        if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key_event) = event::read()? {
                 match key_event.code {
                     KeyCode::Up => btn_direction = Direction::Up,
@@ -73,21 +79,30 @@ pub fn start(stdout: &mut impl Write) -> io::Result<()> {
             }
         }
 
-        if time.elapsed() >= Duration::from_millis(500) {
-            execute!(stdout, MoveTo(snake[0].0, snake[0].1), Print(" "))?;
-
+        if time.elapsed() >= Duration::from_millis(100) {
             direction.set_direction(&btn_direction);
-            snake_move(&mut snake, &direction);
+            let head = snake_next_head(&mut snake, &direction);
 
-            food.0 = rng.gen_range(1..t_size.0 - 1);
-            food.1 = rng.gen_range(1..t_size.1 - 1);
-            execute!(
-                stdout,
-                MoveTo(food.0, food.1),
-                style::PrintStyledContent("█".cyan())
-            )?;
+            match food {
+                Some((x, y)) if head.0 == x && head.1 == y => {
+                    let new_food = (
+                        rng.gen_range(1..t_size.0 - 1),
+                        rng.gen_range(1..t_size.1 - 1),
+                    );
+                    food.replace(new_food);
+                    execute!(
+                        stdout,
+                        MoveTo(new_food.0, new_food.1),
+                        style::PrintStyledContent("█".cyan())
+                    )?;
+                }
+                _ => {
+                    execute!(stdout, MoveTo(snake[0].0, snake[0].1), Print(" "))?;
+                    snake.remove(0);
+                }
+            }
+            snake.push(head);
 
-            let head = snake.last().unwrap();
             execute!(
                 stdout,
                 MoveTo(head.0, head.1),
@@ -122,14 +137,14 @@ fn draw_border(stdout: &mut impl Write, t_size: (u16, u16)) -> io::Result<()> {
     Ok(())
 }
 
-fn snake_move(snake: &mut Vec<(u16, u16)>, direction: &Direction) {
+fn snake_next_head(snake: &mut [(u16, u16)], direction: &Direction) -> (u16, u16) {
     let now_head = snake.last().unwrap();
-    let new_head = match direction {
+    match direction {
         Direction::Up => (now_head.0, now_head.1 - 1),
         Direction::Down => (now_head.0, now_head.1 + 1),
         Direction::Left => (now_head.0 - 1, now_head.1),
         Direction::Right => (now_head.0 + 1, now_head.1),
-    };
-    snake.push(new_head);
-    snake.remove(0);
+    }
 }
+
+// fn create_food(food: &Option<(u16, u16)>) {}
