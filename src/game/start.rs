@@ -44,15 +44,11 @@ pub fn start(stdout: &mut impl Write) -> io::Result<()> {
 
     terminal::enable_raw_mode()?;
 
-    let mut rng = rand::thread_rng();
     let mut time = Instant::now();
     let mut direction = Direction::Down;
     let mut btn_direction = Direction::Down;
     let mut snake = vec![(10, 5), (10, 6), (10, 7)];
-    let mut food: Option<(u16, u16)> = Some((
-        rng.gen_range(1..t_size.0 - 1),
-        rng.gen_range(1..t_size.1 - 1),
-    ));
+    let mut food: Option<(u16, u16)> = Some(create_food(t_size, &snake));
 
     if let Some((x, y)) = food {
         execute!(stdout, MoveTo(x, y), style::PrintStyledContent("█".cyan()))?;
@@ -79,16 +75,21 @@ pub fn start(stdout: &mut impl Write) -> io::Result<()> {
             }
         }
 
-        if time.elapsed() >= Duration::from_millis(100) {
+        if time.elapsed() >= Duration::from_millis(200) {
             direction.set_direction(&btn_direction);
             let head = snake_next_head(&mut snake, &direction);
 
+            let repeat = snake
+                .iter()
+                .enumerate()
+                .any(|(index, item)| index > 0 && *item == head);
+            if repeat {
+                break;
+            }
+
             match food {
                 Some((x, y)) if head.0 == x && head.1 == y => {
-                    let new_food = (
-                        rng.gen_range(1..t_size.0 - 1),
-                        rng.gen_range(1..t_size.1 - 1),
-                    );
+                    let new_food = create_food(t_size, &snake);
                     food.replace(new_food);
                     execute!(
                         stdout,
@@ -102,7 +103,6 @@ pub fn start(stdout: &mut impl Write) -> io::Result<()> {
                 }
             }
             snake.push(head);
-
             execute!(
                 stdout,
                 MoveTo(head.0, head.1),
@@ -147,4 +147,15 @@ fn snake_next_head(snake: &mut [(u16, u16)], direction: &Direction) -> (u16, u16
     }
 }
 
-// fn create_food(food: &Option<(u16, u16)>) {}
+fn create_food(t_size: (u16, u16), snake: &[(u16, u16)]) -> (u16, u16) {
+    let mut rng = rand::thread_rng();
+    loop {
+        let res = (
+            rng.gen_range(1..t_size.0 - 1),
+            rng.gen_range(1..t_size.1 - 1),
+        );
+        if !snake.contains(&res) {
+            break res;
+        }
+    }
+}
